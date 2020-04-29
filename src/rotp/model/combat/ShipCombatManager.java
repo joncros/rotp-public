@@ -71,6 +71,7 @@ public class ShipCombatManager implements Base {
         playerInBattle = false;
         if (sys.hasMonster()) {
             battle(sys, sys.monster());
+            galaxy().ships.disembarkFleets(system.id);
             return;                   
         }
         empiresInConflict = sys.empiresInConflict();
@@ -132,8 +133,15 @@ public class ShipCombatManager implements Base {
             else if (fleet1Armed || fleet2Armed)
                 startCombat = true;
             // if any of those choices matched, begin combat
-            if (startCombat)
+            if (startCombat) {
                 battle(sys, emp1, emp2);
+                Empire victor = results.victor();
+                if (emp1 != victor)
+                    retreatEmpire(emp1);
+                if (emp2 != victor)
+                    retreatEmpire(emp2);
+                galaxy().ships.disembarkFleets(system.id);
+            }
         }
     }
     public void battle(StarSystem sys, SpaceMonster monster) {
@@ -223,8 +231,12 @@ public class ShipCombatManager implements Base {
     public void toggleAutoComplete() {
         autoComplete = !autoComplete;
         log("Toggling Auto Complete: "+autoComplete);
-        autoRunThread = new Thread(autoRunProcess());
-        autoRunThread.start();
+        if (autoComplete) {
+            autoRunThread = new Thread(autoRunProcess());
+            autoRunThread.start();
+        }
+        else
+            continueToNextPlayerStack();
     }
     public void resolveAllCombat() {
         autoComplete = true;
@@ -358,7 +370,6 @@ public class ShipCombatManager implements Base {
     }
     public void endOfCombat(boolean logIncidents) {
         // send retreating ships on their way
-        galaxy().ships.disembarkFleets(system.id);
         results.killRebels();
 
         results.refreshSystemScans();
@@ -504,9 +515,12 @@ public class ShipCombatManager implements Base {
 
         List<CombatStack> activeStacks = new ArrayList<>(results.activeStacks());
         for (CombatStack st : activeStacks) {
-            if ((st.empire == e) && !st.isColony()) {
-                if (st.retreat())
-                    retreatingFleets.add(st);
+            if ((st.empire == e) && st.isShip()) {
+                CombatStackShip ship = (CombatStackShip) st;
+                if (ship.retreat()) {
+                    retreatingFleets.add(ship);
+                    ship.drawRetreat();
+                }
             }
         }
         results.activeStacks().removeAll(retreatingFleets);
